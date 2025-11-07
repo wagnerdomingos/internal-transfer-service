@@ -17,6 +17,6 @@ type Account struct {
 type AccountRepository interface {
 	CreateAccount(account *Account) error
 	GetAccount(id uuid.UUID) (*Account, error)
+	GetAccountForUpdate(id uuid.UUID) (*Account, error)
 	UpdateAccountBalance(id uuid.UUID, newBalance decimal.Decimal) error
-	WithTransaction(fn func(repo AccountRepository) error) error
 }

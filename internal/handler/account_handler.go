@@ -26,7 +26,7 @@ type CreateAccountRequest struct {
 }
 
 type AccountResponse struct {
-	ID      string `json:"id"`
+	ID      string `json:"account_id"`
 	Balance string `json:"balance"`
 }
 
@@ -45,7 +45,11 @@ func (h *AccountHandler) CreateAccount(w http.ResponseWriter, r *http.Request) {
 
 	account, err := h.accountService.CreateAccount(initialBalance)
 	if err != nil {
-		writeError(w, err.(*errors.AppError))
+		if appErr, ok := err.(*errors.AppError); ok {
+			writeError(w, appErr)
+		} else {
+			writeError(w, errors.NewAppError(errors.InternalError, "an unexpected error occurred"))
+		}
 		return
 	}
 
@@ -63,7 +67,11 @@ func (h *AccountHandler) GetAccount(w http.ResponseWriter, r *http.Request) {
 
 	account, err := h.accountService.GetAccount(accountID)
 	if err != nil {
-		writeError(w, err.(*errors.AppError))
+		if appErr, ok := err.(*errors.AppError); ok {
+			writeError(w, appErr)
+		} else {
+			writeError(w, errors.NewAppError(errors.InternalError, "an unexpected error occurred"))
+		}
 		return
 	}
 

@@ -38,6 +38,11 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		return nil, err
 	}
 
+	// Configure connection pool for better performance
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(25)
+	db.SetConnMaxLifetime(5 * time.Minute)
+
 	// Test database connection
 	if err := db.Ping(); err != nil {
 		db.Close()
@@ -48,13 +53,12 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		logger.Info("Successfully connected to database")
 	}
 
-	// Initialize repositories
-	accountRepo := repository.NewAccountRepository(db, logger)
-	transactionRepo := repository.NewTransactionRepository(db, logger)
+	// Initialize store (Unit of Work)
+	store := repository.NewStore(db, logger)
 
 	// Initialize services
-	accountService := service.NewAccountService(accountRepo, logger)
-	transactionService := service.NewTransactionService(accountRepo, transactionRepo, logger)
+	accountService := service.NewAccountService(store, logger)
+	transactionService := service.NewTransactionService(store, logger)
 
 	// Initialize handlers
 	accountHandler := handler.NewAccountHandler(accountService)
@@ -62,6 +66,9 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 
 	// Setup router
 	router := mux.NewRouter()
+
+	// Add middleware for logging
+	router.Use(loggingMiddleware(logger))
 
 	// Account routes
 	router.HandleFunc("/accounts", accountHandler.CreateAccount).Methods("POST")
@@ -72,8 +79,18 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 
 	// Health check
 	router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		// Check database connectivity in health check
+		if err := db.Ping(); err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			json.NewEncoder(w).Encode(map[string]string{"status": "unhealthy", "error": "database unavailable"})
+			return
+		}
+
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":    "healthy",
+			"timestamp": time.Now().UTC().Format(time.RFC3339),
+		})
 	}).Methods("GET")
 
 	return &Server{
@@ -81,6 +98,39 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		db:     db,
 		logger: logger,
 	}, nil
+}
+
+// loggingMiddleware adds request logging
+func loggingMiddleware(logger *slog.Logger) mux.MiddlewareFunc {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+
+			// Create response wrapper to capture status code
+			ww := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+
+			next.ServeHTTP(ww, r)
+
+			logger.Info("request completed",
+				"method", r.Method,
+				"path", r.URL.Path,
+				"status", ww.statusCode,
+				"duration", time.Since(start),
+				"user_agent", r.UserAgent(),
+			)
+		})
+	}
+}
+
+// responseWriter wraps http.ResponseWriter to capture status code
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
 }
 
 // Start starts the HTTP server on the specified port

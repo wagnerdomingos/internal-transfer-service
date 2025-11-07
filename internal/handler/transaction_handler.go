@@ -61,7 +61,11 @@ func (h *TransactionHandler) Transfer(w http.ResponseWriter, r *http.Request) {
 
 	transaction, err := h.transactionService.Transfer(transferReq)
 	if err != nil {
-		writeError(w, err.(*errors.AppError))
+		if appErr, ok := err.(*errors.AppError); ok {
+			writeError(w, appErr)
+		} else {
+			writeError(w, errors.NewAppError(errors.InternalError, "an unexpected error occurred"))
+		}
 		return
 	}
 

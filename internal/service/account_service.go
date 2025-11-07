@@ -8,17 +8,18 @@ import (
 
 	"internal-transfers/internal/domain"
 	"internal-transfers/internal/errors"
+	"internal-transfers/internal/repository"
 )
 
 type AccountService struct {
-	accountRepo domain.AccountRepository
-	logger      *slog.Logger
+	store  *repository.Store
+	logger *slog.Logger
 }
 
-func NewAccountService(accountRepo domain.AccountRepository, logger *slog.Logger) *AccountService {
+func NewAccountService(store *repository.Store, logger *slog.Logger) *AccountService {
 	return &AccountService{
-		accountRepo: accountRepo,
-		logger:      logger,
+		store:  store,
+		logger: logger,
 	}
 }
 
@@ -29,12 +30,18 @@ func (s *AccountService) CreateAccount(initialBalance decimal.Decimal) (*domain.
 		return nil, errors.ErrInvalidAmount
 	}
 
+	// Validate reasonable limits
+	maxInitialBalance := decimal.NewFromInt(10_000_000_000) // 10 billion
+	if initialBalance.GreaterThan(maxInitialBalance) {
+		return nil, errors.NewAppError(errors.InvalidAmount, "initial balance exceeds maximum limit")
+	}
+
 	account := &domain.Account{
 		ID:      uuid.New(),
 		Balance: initialBalance,
 	}
 
-	if err := s.accountRepo.CreateAccount(account); err != nil {
+	if err := s.store.Account().CreateAccount(account); err != nil {
 		return nil, err
 	}
 
@@ -50,5 +57,5 @@ func (s *AccountService) GetAccount(accountID string) (*domain.Account, error) {
 		return nil, errors.ErrInvalidAccountID
 	}
 
-	return s.accountRepo.GetAccount(id)
+	return s.store.Account().GetAccount(id)
 }

@@ -8,23 +8,21 @@ import (
 
 	"internal-transfers/internal/domain"
 	"internal-transfers/internal/errors"
+	"internal-transfers/internal/repository"
 )
 
 type TransactionService struct {
-	accountRepo     domain.AccountRepository
-	transactionRepo domain.TransactionRepository
-	logger          *slog.Logger
+	store  *repository.Store
+	logger *slog.Logger
 }
 
 func NewTransactionService(
-	accountRepo domain.AccountRepository,
-	transactionRepo domain.TransactionRepository,
+	store *repository.Store,
 	logger *slog.Logger,
 ) *TransactionService {
 	return &TransactionService{
-		accountRepo:     accountRepo,
-		transactionRepo: transactionRepo,
-		logger:          logger,
+		store:  store,
+		logger: logger,
 	}
 }
 
@@ -48,48 +46,59 @@ func (s *TransactionService) Transfer(req *TransferRequest) (*domain.Transaction
 		return nil, err
 	}
 
-	// Check for existing transaction with same idempotency key
-	existingTx, err := s.transactionRepo.GetTransactionByIDempotencyKey(req.IdempotencyKey)
-	if err != nil {
-		return nil, err
-	}
-	if existingTx != nil {
-		s.logger.Info("Returning existing transaction for idempotency key",
-			"idempotency_key", req.IdempotencyKey,
-			"transaction_id", existingTx.ID)
-		return existingTx, nil
-	}
-
 	// Validate transfer
 	if err := s.validateTransfer(sourceID, destID, req.Amount); err != nil {
 		return nil, err
 	}
 
-	// Create transaction record
-	transaction := &domain.Transaction{
-		ID:                   uuid.New(),
-		SourceAccountID:      sourceID,
-		DestinationAccountID: destID,
-		Amount:               req.Amount,
-		IdempotencyKey:       req.IdempotencyKey,
-		Status:               "pending",
-	}
+	var transaction *domain.Transaction
 
-	// Process transfer in a single database transaction
-	err = s.accountRepo.WithTransaction(func(accountRepo domain.AccountRepository) error {
-		// Re-get accounts within transaction to ensure consistency
-		sourceAccount, err := accountRepo.GetAccount(sourceID)
+	// Process everything in a single database transaction
+	err = s.store.WithTransaction(func(store *repository.Store) error {
+		// Check for existing transaction with same idempotency key INSIDE transaction
+		existingTx, err := store.Transaction().GetTransactionByIDempotencyKey(req.IdempotencyKey)
+		if err != nil {
+			return err
+		}
+		if existingTx != nil {
+			s.logger.Info("Returning existing transaction for idempotency key",
+				"idempotency_key", req.IdempotencyKey,
+				"transaction_id", existingTx.ID)
+			transaction = existingTx
+			return nil
+		}
+
+		// Get accounts WITH LOCKS for update
+		sourceAccount, err := store.Account().GetAccountForUpdate(sourceID)
 		if err != nil {
 			return err
 		}
 
-		destAccount, err := accountRepo.GetAccount(destID)
+		destAccount, err := store.Account().GetAccountForUpdate(destID)
 		if err != nil {
+			return err
+		}
+
+		// Create transaction record as pending INSIDE transaction
+		transaction = &domain.Transaction{
+			ID:                   uuid.New(),
+			SourceAccountID:      sourceID,
+			DestinationAccountID: destID,
+			Amount:               req.Amount,
+			IdempotencyKey:       req.IdempotencyKey,
+			Status:               "pending",
+		}
+
+		if err := store.Transaction().CreateTransaction(transaction); err != nil {
 			return err
 		}
 
 		// Check sufficient balance
 		if sourceAccount.Balance.LessThan(req.Amount) {
+			transaction.Status = "failed"
+			if updateErr := store.Transaction().UpdateTransactionStatus(transaction.ID, "failed"); updateErr != nil {
+				return updateErr
+			}
 			return errors.ErrInsufficientBalance
 		}
 
@@ -98,31 +107,21 @@ func (s *TransactionService) Transfer(req *TransferRequest) (*domain.Transaction
 		newDestBalance := destAccount.Balance.Add(req.Amount)
 
 		// Update accounts
-		if err := accountRepo.UpdateAccountBalance(sourceID, newSourceBalance); err != nil {
+		if err := store.Account().UpdateAccountBalance(sourceID, newSourceBalance); err != nil {
 			return err
 		}
 
-		if err := accountRepo.UpdateAccountBalance(destID, newDestBalance); err != nil {
+		if err := store.Account().UpdateAccountBalance(destID, newDestBalance); err != nil {
 			return err
 		}
 
-		return nil
+		// Mark transaction as completed
+		transaction.Status = "completed"
+		return store.Transaction().UpdateTransactionStatus(transaction.ID, "completed")
 	})
 
 	if err != nil {
 		s.logger.Error("Transfer failed", "error", err)
-		// Still create the transaction record but mark as failed
-		transaction.Status = "failed"
-		if createErr := s.transactionRepo.CreateTransaction(transaction); createErr != nil {
-			s.logger.Error("Failed to create failed transaction record", "error", createErr)
-		}
-		return nil, err
-	}
-
-	// Mark transaction as completed
-	transaction.Status = "completed"
-	if err := s.transactionRepo.CreateTransaction(transaction); err != nil {
-		s.logger.Error("Failed to create completed transaction record", "error", err)
 		return nil, err
 	}
 
@@ -150,7 +149,18 @@ func (s *TransactionService) validateTransfer(sourceID, destID uuid.UUID, amount
 	}
 
 	if amount.IsNegative() || amount.IsZero() {
-		return errors.ErrInvalidAmount
+		return errors.NewAppError(errors.InvalidAmount, "amount must be positive")
+	}
+
+	// Validate reasonable limits
+	maxAmount := decimal.NewFromInt(1_000_000_000) // 1 billion
+	if amount.GreaterThan(maxAmount) {
+		return errors.NewAppError(errors.InvalidAmount, "amount exceeds maximum limit")
+	}
+
+	minAmount := decimal.NewFromFloat(0.01)
+	if amount.LessThan(minAmount) {
+		return errors.NewAppError(errors.InvalidAmount, "amount below minimum limit")
 	}
 
 	return nil

@@ -18,7 +18,7 @@ type accountRepository struct {
 	logger *slog.Logger
 }
 
-func NewAccountRepository(db DB, logger *slog.Logger) domain.AccountRepository {
+func NewAccountRepository(db SQLExecutor, logger *slog.Logger) domain.AccountRepository {
 	return &accountRepository{
 		db:     db,
 		logger: logger,
@@ -27,7 +27,7 @@ func NewAccountRepository(db DB, logger *slog.Logger) domain.AccountRepository {
 
 func (r *accountRepository) CreateAccount(account *domain.Account) error {
 	query := `
-		INSERT INTO accounts (id, balance, created_at, updated_at)
+		INSERT INTO accounts (id, balance, created_at, updated_at) 
 		VALUES ($1, $2, $3, $4)
 	`
 
@@ -57,10 +57,24 @@ func (r *accountRepository) CreateAccount(account *domain.Account) error {
 
 func (r *accountRepository) GetAccount(id uuid.UUID) (*domain.Account, error) {
 	query := `
-		SELECT id, balance, created_at, updated_at
+		SELECT id, balance, created_at, updated_at 
 		FROM accounts WHERE id = $1
 	`
 
+	return r.scanAccount(query, id)
+}
+
+// NEW METHOD: GetAccountForUpdate with row locking
+func (r *accountRepository) GetAccountForUpdate(id uuid.UUID) (*domain.Account, error) {
+	query := `
+		SELECT id, balance, created_at, updated_at 
+		FROM accounts WHERE id = $1 FOR UPDATE
+	`
+
+	return r.scanAccount(query, id)
+}
+
+func (r *accountRepository) scanAccount(query string, id uuid.UUID) (*domain.Account, error) {
 	var account domain.Account
 	var balanceStr string
 
@@ -92,8 +106,8 @@ func (r *accountRepository) GetAccount(id uuid.UUID) (*domain.Account, error) {
 
 func (r *accountRepository) UpdateAccountBalance(id uuid.UUID, newBalance decimal.Decimal) error {
 	query := `
-		UPDATE accounts
-		SET balance = $1, updated_at = $2
+		UPDATE accounts 
+		SET balance = $1, updated_at = $2 
 		WHERE id = $3
 	`
 
@@ -114,40 +128,5 @@ func (r *accountRepository) UpdateAccountBalance(id uuid.UUID, newBalance decima
 	}
 
 	r.logger.Info("Account balance updated", "account_id", id, "new_balance", newBalance)
-	return nil
-}
-
-func (r *accountRepository) WithTransaction(fn func(repo domain.AccountRepository) error) error {
-	// Only sql.DB can begin transactions
-	db, ok := r.db.(DB)
-	if !ok {
-		return errors.NewAppError(errors.InternalError, "cannot begin transaction on non-db executor")
-	}
-
-	tx, err := db.Begin()
-	if err != nil {
-		return errors.NewAppError(errors.InternalError, "failed to begin transaction").WithDetails(err.Error())
-	}
-
-	txWrapper := &TxWrapper{Tx: tx}
-	txRepo := &accountRepository{db: txWrapper, logger: r.logger}
-
-	defer func() {
-		if p := recover(); p != nil {
-			tx.Rollback()
-			panic(p)
-		}
-	}()
-
-	err = fn(txRepo)
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-
-	if err := tx.Commit(); err != nil {
-		return errors.NewAppError(errors.InternalError, "failed to commit transaction").WithDetails(err.Error())
-	}
-
 	return nil
 }

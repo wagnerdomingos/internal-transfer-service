@@ -8,14 +8,15 @@ import (
 type ErrorCode string
 
 const (
-	InvalidInput         ErrorCode = "invalid_input"
-	AccountNotFound      ErrorCode = "account_not_found"
-	InsufficientBalance  ErrorCode = "insufficient_balance"
-	DuplicateAccount     ErrorCode = "duplicate_account"
-	DuplicateTransaction ErrorCode = "duplicate_transaction"
-	InvalidAmount        ErrorCode = "invalid_amount"
-	SameAccountTransfer  ErrorCode = "same_account_transfer"
-	InternalError        ErrorCode = "internal_error"
+	InvalidInput           ErrorCode = "invalid_input"
+	AccountNotFound        ErrorCode = "account_not_found"
+	InsufficientBalance    ErrorCode = "insufficient_balance"
+	DuplicateAccount       ErrorCode = "duplicate_account"
+	DuplicateTransaction   ErrorCode = "duplicate_transaction"
+	InvalidAmount          ErrorCode = "invalid_amount"
+	SameAccountTransfer    ErrorCode = "same_account_transfer"
+	InternalError          ErrorCode = "internal_error"
+	CannotBeginTransaction ErrorCode = "cannot_begin_transaction"
 )
 
 type AppError struct {
@@ -65,11 +66,12 @@ func (e *AppError) HTTPStatus() int {
 
 // Predefined errors for common cases
 var (
-	ErrInvalidAccountID     = NewAppError(InvalidInput, "invalid account ID")
-	ErrAccountNotFound      = NewAppError(AccountNotFound, "account not found")
-	ErrInsufficientBalance  = NewAppError(InsufficientBalance, "insufficient balance")
-	ErrDuplicateAccount     = NewAppError(DuplicateAccount, "account already exists")
-	ErrDuplicateTransaction = NewAppError(DuplicateTransaction, "transaction already processed")
-	ErrInvalidAmount        = NewAppError(InvalidAmount, "invalid amount")
-	ErrSameAccountTransfer  = NewAppError(SameAccountTransfer, "source and destination accounts cannot be the same")
+	ErrInvalidAccountID       = NewAppError(InvalidInput, "invalid account ID")
+	ErrAccountNotFound        = NewAppError(AccountNotFound, "account not found")
+	ErrInsufficientBalance    = NewAppError(InsufficientBalance, "insufficient balance")
+	ErrDuplicateAccount       = NewAppError(DuplicateAccount, "account already exists")
+	ErrDuplicateTransaction   = NewAppError(DuplicateTransaction, "transaction already processed")
+	ErrInvalidAmount          = NewAppError(InvalidAmount, "invalid amount")
+	ErrSameAccountTransfer    = NewAppError(SameAccountTransfer, "source and destination accounts cannot be the same")
+	ErrCannotBeginTransaction = NewAppError(CannotBeginTransaction, "cannot begin transaction on non-db executor")
 )
