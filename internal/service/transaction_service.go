@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"log/slog"
 
 	"github.com/google/uuid"
@@ -68,15 +69,34 @@ func (s *TransactionService) Transfer(req *TransferRequest) (*domain.Transaction
 			return nil
 		}
 
-		// Get accounts WITH LOCKS for update
-		sourceAccount, err := store.Account().GetAccountForUpdate(sourceID)
+		// Determine deterministic order by comparing UUID bytes to avoid deadlocks
+		var firstID, secondID uuid.UUID
+		if bytes.Compare(sourceID[:], destID[:]) < 0 {
+			firstID, secondID = sourceID, destID
+		} else {
+			firstID, secondID = destID, sourceID
+		}
+
+		// Lock first account
+		firstAccount, err := store.Account().GetAccountForUpdate(firstID)
 		if err != nil {
 			return err
 		}
 
-		destAccount, err := store.Account().GetAccountForUpdate(destID)
+		// Lock second account
+		secondAccount, err := store.Account().GetAccountForUpdate(secondID)
 		if err != nil {
 			return err
+		}
+
+		// Map locked rows back to source and destination
+		var sourceAccount, destAccount *domain.Account
+		if firstID == sourceID {
+			sourceAccount = firstAccount
+			destAccount = secondAccount
+		} else {
+			sourceAccount = secondAccount
+			destAccount = firstAccount
 		}
 
 		// Create transaction record as pending INSIDE transaction
