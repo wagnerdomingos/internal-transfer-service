@@ -13,3 +13,10 @@ type Account struct {
 	CreatedAt time.Time       `json:"created_at"`
 	UpdatedAt time.Time       `json:"updated_at"`
 }
+
+type AccountRepository interface {
+	CreateAccount(account *Account) error
+	GetAccount(id uuid.UUID) (*Account, error)
+	UpdateAccountBalance(id uuid.UUID, newBalance decimal.Decimal) error
+	WithTransaction(fn func(repo AccountRepository) error) error
+}

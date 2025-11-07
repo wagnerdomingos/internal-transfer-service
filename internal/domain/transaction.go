@@ -17,3 +17,10 @@ type Transaction struct {
 	CreatedAt            time.Time       `json:"created_at"`
 	UpdatedAt            time.Time       `json:"updated_at"`
 }
+
+type TransactionRepository interface {
+	CreateTransaction(tx *Transaction) error
+	GetTransactionByID(id uuid.UUID) (*Transaction, error)
+	GetTransactionByIDempotencyKey(key uuid.UUID) (*Transaction, error)
+	UpdateTransactionStatus(id uuid.UUID, status string) error
+}
