@@ -4,6 +4,8 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"internal-transfers/internal/config"
@@ -26,6 +28,11 @@ func main() {
 
 	slog.Info("Server started successfully", "port", port)
 
+	// Wait for interrupt signal to gracefully shutdown the server
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
 	// Create context with timeout for shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -35,5 +42,5 @@ func main() {
 		os.Exit(1)
 	}
 
-	slog.Info("Server stopped")
+	slog.Info("Server stopped gracefully")
 }
