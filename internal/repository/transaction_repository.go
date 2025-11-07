@@ -27,8 +27,8 @@ func NewTransactionRepository(db SQLExecutor, logger *slog.Logger) domain.Transa
 
 func (r *transactionRepository) CreateTransaction(tx *domain.Transaction) error {
 	query := `
-		INSERT INTO transactions 
-		(id, source_account_id, destination_account_id, amount, idempotency_key, status, created_at, updated_at) 
+		INSERT INTO transactions
+		(id, source_account_id, destination_account_id, amount, idempotency_key, status, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
 
