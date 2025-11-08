@@ -599,20 +599,28 @@ CREATE TABLE transactions (
 ### 🛡️ Concurrency Scenarios Handled
 
 #### Simultaneous Transfers Between Same Accounts
-**Scenario:** Account A → Account B and Account B → Account A occur simultaneously  
-**Prevention:** Deterministic locking order (lower ID first) prevents deadlocks.
+```text
+Scenario: Account A → Account B and Account B → Account A occur simultaneously  
+Prevention: Deterministic locking order (lower ID first) prevents deadlocks.
+```
 
 #### Rapid Successive Transfers
-**Scenario:** Multiple transfers from same source account in quick succession  
-**Prevention:** Row-level locking ensures sequential processing of balance updates.
+```text
+Scenario: Multiple transfers from same source account in quick succession  
+Prevention: Row-level locking ensures sequential processing of balance updates.
+```
 
 #### Duplicate Request Protection
-**Scenario:** Network timeouts cause client to retry same transfer  
-**Prevention:** Idempotency keys prevent duplicate processing across retries.
+```text
+Scenario: Network timeouts cause client to retry same transfer  
+Prevention: Idempotency keys prevent duplicate processing across retries.
+```
 
 #### Balance Consistency Under Load
-**Scenario:** High volume of transfers while querying balances  
-**Prevention:** Database isolation levels ensure consistent balance reads.
+```text
+Scenario: High volume of transfers while querying balances  
+Prevention: Database isolation levels ensure consistent balance reads.
+```
 
 
 ---
