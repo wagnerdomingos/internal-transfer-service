@@ -548,18 +548,72 @@ CREATE TABLE transactions (
 - **Transfer Limits**: Reasonable limits on amounts to prevent abuse
 
 ### Technical Design Decisions
-- **Database Transactions**: All transfers use database transactions for ACID properties  
-- **Deadlock Prevention**: Deterministic locking order for concurrent transfers  
-- **Idempotency**: Implemented at database level with unique constraints  
+- **Database Transactions**: All transfers use database transactions for ACID properties  (will be clarified better down below) 
+- **Deadlock Prevention**: Deterministic locking order for concurrent transfers (will be clarified better down below) 
+- **Idempotency**: Implemented at database level with unique constraints   (will be clarified better down below) 
 - **Error Handling**: Structured errors with clear codes and messages  
 - **Logging**: Structured JSON logging for production use  
 - **Health Checks**: Database connectivity verification in health endpoint
+- **Monetary Precision**: Uses [`shopspring/decimal`](https://github.com/shopspring/decimal) for all monetary calculations and representations.  
+  This choice avoids floating-point precision issues inherent to `float64`, ensuring deterministic and accurate handling of financial amounts.
+
 
 ### Performance Considerations
 - **Connection Pooling**: Configured database connection pool  
 - **Indexing**: Strategic indexes for common query patterns  
 - **Locking Strategy**: Row-level locking with `FOR UPDATE`  
 - **Bulk Operations**: Optimized for high concurrent transfer scenarios
+
+### ⚙️ Race Condition Prevention & Concurrency Control
+
+#### ⚡ Critical Concurrency Safeguards
+
+##### Database-Level Race Condition Prevention
+
+**Pessimistic Locking Strategy**
+- **Row-Level Locking**: All account balance updates use `SELECT FOR UPDATE` to lock account rows during transfers.  
+- **Deterministic Locking Order**: Accounts are locked in a consistent order (lowest ID first) to prevent deadlocks.  
+- **Transaction Isolation**: PostgreSQL’s `REPEATABLE READ` isolation level ensures consistent reads within transactions.  
+- **Exclusive Locks**: Account balance modifications hold exclusive locks until transaction completion.
+
+**Deadlock Prevention Mechanisms**
+- **Ordered Resource Acquisition**: Always lock accounts in the same order (source then destination, or by account ID sort).  
+- **Lock Timeout Configuration**: Automatic lock release after configurable timeout to prevent indefinite blocking.  
+- **Retry Logic with Backoff**: Automatic retry of failed transactions due to deadlocks with exponential backoff.  
+- **Minimal Lock Duration**: Locks are held only for the strict necessary duration within transaction boundaries.
+
+##### Application-Level Concurrency Controls
+
+**Idempotency Key Implementation**
+- **Unique Constraint Enforcement**: Database-level unique constraints prevent duplicate transaction processing.  
+- **Pre-Transaction Validation**: Idempotency checks occur within the same database transaction as balance updates.  
+- **Cross-Request Consistency**: Same idempotency key returns identical response regardless of request timing.  
+- **Request Deduplication**: Concurrent requests with same idempotency key are handled as duplicates, not separate transactions.
+
+**Atomic Transaction Processing**
+- **Single Database Transaction**: Entire transfer process (balance checks, updates, transaction record) occurs in one atomic transaction.  
+- **All-or-Nothing Semantics**: Either all operations succeed or complete rollback occurs.  
+- **Consistent State Guarantee**: Database constraints ensure accounts cannot have negative balances at transaction commit.  
+- **Serializable Isolation**: Transactions appear to execute sequentially, maintaining data consistency.
+
+### 🛡️ Concurrency Scenarios Handled
+
+#### Simultaneous Transfers Between Same Accounts
+**Scenario:** Account A → Account B and Account B → Account A occur simultaneously  
+**Prevention:** Deterministic locking order (lower ID first) prevents deadlocks.
+
+#### Rapid Successive Transfers
+**Scenario:** Multiple transfers from same source account in quick succession  
+**Prevention:** Row-level locking ensures sequential processing of balance updates.
+
+#### Duplicate Request Protection
+**Scenario:** Network timeouts cause client to retry same transfer  
+**Prevention:** Idempotency keys prevent duplicate processing across retries.
+
+#### Balance Consistency Under Load
+**Scenario:** High volume of transfers while querying balances  
+**Prevention:** Database isolation levels ensure consistent balance reads.
+
 
 ---
 
