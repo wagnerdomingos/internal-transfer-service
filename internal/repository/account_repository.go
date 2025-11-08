@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/shopspring/decimal"
 
@@ -55,7 +54,7 @@ func (r *accountRepository) CreateAccount(account *domain.Account) error {
 	return nil
 }
 
-func (r *accountRepository) GetAccount(id uuid.UUID) (*domain.Account, error) {
+func (r *accountRepository) GetAccount(id int64) (*domain.Account, error) {
 	query := `
 		SELECT id, balance, created_at, updated_at 
 		FROM accounts WHERE id = $1
@@ -64,8 +63,7 @@ func (r *accountRepository) GetAccount(id uuid.UUID) (*domain.Account, error) {
 	return r.scanAccount(query, id)
 }
 
-// NEW METHOD: GetAccountForUpdate with row locking
-func (r *accountRepository) GetAccountForUpdate(id uuid.UUID) (*domain.Account, error) {
+func (r *accountRepository) GetAccountForUpdate(id int64) (*domain.Account, error) {
 	query := `
 		SELECT id, balance, created_at, updated_at 
 		FROM accounts WHERE id = $1 FOR UPDATE
@@ -74,7 +72,7 @@ func (r *accountRepository) GetAccountForUpdate(id uuid.UUID) (*domain.Account, 
 	return r.scanAccount(query, id)
 }
 
-func (r *accountRepository) scanAccount(query string, id uuid.UUID) (*domain.Account, error) {
+func (r *accountRepository) scanAccount(query string, id int64) (*domain.Account, error) {
 	var account domain.Account
 	var balanceStr string
 
@@ -104,7 +102,7 @@ func (r *accountRepository) scanAccount(query string, id uuid.UUID) (*domain.Acc
 	return &account, nil
 }
 
-func (r *accountRepository) UpdateAccountBalance(id uuid.UUID, newBalance decimal.Decimal) error {
+func (r *accountRepository) UpdateAccountBalance(id int64, newBalance decimal.Decimal) error {
 	query := `
 		UPDATE accounts 
 		SET balance = $1, updated_at = $2 

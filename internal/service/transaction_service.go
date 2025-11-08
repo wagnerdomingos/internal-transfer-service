@@ -1,8 +1,8 @@
 package service
 
 import (
-	"bytes"
 	"log/slog"
+	"strconv"
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
@@ -69,9 +69,9 @@ func (s *TransactionService) Transfer(req *TransferRequest) (*domain.Transaction
 			return nil
 		}
 
-		// Determine deterministic order by comparing UUID bytes to avoid deadlocks
-		var firstID, secondID uuid.UUID
-		if bytes.Compare(sourceID[:], destID[:]) < 0 {
+		// Determine deterministic order by comparing account IDs to avoid deadlocks
+		var firstID, secondID int64
+		if sourceID < destID {
 			firstID, secondID = sourceID, destID
 		} else {
 			firstID, secondID = destID, sourceID
@@ -149,21 +149,21 @@ func (s *TransactionService) Transfer(req *TransferRequest) (*domain.Transaction
 	return transaction, nil
 }
 
-func (s *TransactionService) parseAccountIDs(sourceIDStr, destIDStr string) (uuid.UUID, uuid.UUID, error) {
-	sourceID, err := uuid.Parse(sourceIDStr)
-	if err != nil {
-		return uuid.Nil, uuid.Nil, errors.ErrInvalidAccountID
+func (s *TransactionService) parseAccountIDs(sourceIDStr, destIDStr string) (int64, int64, error) {
+	sourceID, err := strconv.ParseInt(sourceIDStr, 10, 64)
+	if err != nil || sourceID <= 0 {
+		return 0, 0, errors.ErrInvalidAccountID
 	}
 
-	destID, err := uuid.Parse(destIDStr)
-	if err != nil {
-		return uuid.Nil, uuid.Nil, errors.ErrInvalidAccountID
+	destID, err := strconv.ParseInt(destIDStr, 10, 64)
+	if err != nil || destID <= 0 {
+		return 0, 0, errors.ErrInvalidAccountID
 	}
 
 	return sourceID, destID, nil
 }
 
-func (s *TransactionService) validateTransfer(sourceID, destID uuid.UUID, amount decimal.Decimal) error {
+func (s *TransactionService) validateTransfer(sourceID, destID int64, amount decimal.Decimal) error {
 	if sourceID == destID {
 		return errors.ErrSameAccountTransfer
 	}

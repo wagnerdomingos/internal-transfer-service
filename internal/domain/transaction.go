@@ -9,10 +9,10 @@ import (
 
 type Transaction struct {
 	ID                   uuid.UUID       `json:"id"`
-	SourceAccountID      uuid.UUID       `json:"source_account_id"`
-	DestinationAccountID uuid.UUID       `json:"destination_account_id"`
+	SourceAccountID      int64           `json:"source_account_id"`
+	DestinationAccountID int64           `json:"destination_account_id"`
 	Amount               decimal.Decimal `json:"amount"`
-	IdempotencyKey       uuid.UUID       `json:"idempotency_key"`
+	IdempotencyKey       uuid.UUID       `json:"idempotency_key,omitempty"`
 	Status               string          `json:"status"`
 	CreatedAt            time.Time       `json:"created_at"`
 	UpdatedAt            time.Time       `json:"updated_at"`

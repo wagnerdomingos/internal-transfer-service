@@ -2,8 +2,8 @@ package service
 
 import (
 	"log/slog"
+	"strconv"
 
-	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 
 	"internal-transfers/internal/domain"
@@ -23,8 +23,8 @@ func NewAccountService(store *repository.Store, logger *slog.Logger) *AccountSer
 	}
 }
 
-func (s *AccountService) CreateAccount(initialBalance decimal.Decimal) (*domain.Account, error) {
-	s.logger.Info("Creating account", "initial_balance", initialBalance)
+func (s *AccountService) CreateAccount(accountID int64, initialBalance decimal.Decimal) (*domain.Account, error) {
+	s.logger.Info("Creating account", "account_id", accountID, "initial_balance", initialBalance)
 
 	if initialBalance.IsNegative() {
 		return nil, errors.ErrInvalidAmount
@@ -36,8 +36,13 @@ func (s *AccountService) CreateAccount(initialBalance decimal.Decimal) (*domain.
 		return nil, errors.NewAppError(errors.InvalidAmount, "initial balance exceeds maximum limit")
 	}
 
+	// Validate account ID is positive
+	if accountID <= 0 {
+		return nil, errors.NewAppError(errors.InvalidInput, "account ID must be positive")
+	}
+
 	account := &domain.Account{
-		ID:      uuid.New(),
+		ID:      accountID,
 		Balance: initialBalance,
 	}
 
@@ -52,8 +57,8 @@ func (s *AccountService) CreateAccount(initialBalance decimal.Decimal) (*domain.
 func (s *AccountService) GetAccount(accountID string) (*domain.Account, error) {
 	s.logger.Info("Getting account", "account_id", accountID)
 
-	id, err := uuid.Parse(accountID)
-	if err != nil {
+	id, err := strconv.ParseInt(accountID, 10, 64)
+	if err != nil || id <= 0 {
 		return nil, errors.ErrInvalidAccountID
 	}
 

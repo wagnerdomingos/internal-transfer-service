@@ -22,12 +22,13 @@ func NewAccountHandler(accountService *service.AccountService) *AccountHandler {
 }
 
 type CreateAccountRequest struct {
+	AccountID      int64  `json:"account_id"`
 	InitialBalance string `json:"initial_balance"`
 }
 
 type AccountResponse struct {
-	ID      string `json:"account_id"`
-	Balance string `json:"balance"`
+	AccountID int64  `json:"account_id"`
+	Balance   string `json:"balance"`
 }
 
 func (h *AccountHandler) CreateAccount(w http.ResponseWriter, r *http.Request) {
@@ -43,7 +44,7 @@ func (h *AccountHandler) CreateAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	account, err := h.accountService.CreateAccount(initialBalance)
+	account, err := h.accountService.CreateAccount(req.AccountID, initialBalance)
 	if err != nil {
 		if appErr, ok := err.(*errors.AppError); ok {
 			writeError(w, appErr)
@@ -54,8 +55,8 @@ func (h *AccountHandler) CreateAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := AccountResponse{
-		ID:      account.ID.String(),
-		Balance: account.Balance.String(),
+		AccountID: account.ID,
+		Balance:   account.Balance.String(),
 	}
 
 	writeJSON(w, http.StatusCreated, response)
@@ -76,8 +77,8 @@ func (h *AccountHandler) GetAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := AccountResponse{
-		ID:      account.ID.String(),
-		Balance: account.Balance.String(),
+		AccountID: account.ID,
+		Balance:   account.Balance.String(),
 	}
 
 	writeJSON(w, http.StatusOK, response)

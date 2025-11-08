@@ -3,12 +3,11 @@ package domain
 import (
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 )
 
 type Account struct {
-	ID        uuid.UUID       `json:"account_id"`
+	ID        int64           `json:"account_id"`
 	Balance   decimal.Decimal `json:"balance"`
 	CreatedAt time.Time       `json:"created_at"`
 	UpdatedAt time.Time       `json:"updated_at"`
@@ -16,7 +15,7 @@ type Account struct {
 
 type AccountRepository interface {
 	CreateAccount(account *Account) error
-	GetAccount(id uuid.UUID) (*Account, error)
-	GetAccountForUpdate(id uuid.UUID) (*Account, error)
-	UpdateAccountBalance(id uuid.UUID, newBalance decimal.Decimal) error
+	GetAccount(id int64) (*Account, error)
+	GetAccountForUpdate(id int64) (*Account, error)
+	UpdateAccountBalance(id int64, newBalance decimal.Decimal) error
 }
