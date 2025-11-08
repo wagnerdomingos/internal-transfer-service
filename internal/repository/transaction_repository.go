@@ -33,13 +33,22 @@ func (r *transactionRepository) CreateTransaction(tx *domain.Transaction) error 
 	`
 
 	now := time.Now()
+
+	// Handle optional idempotency key
+	var idempotencyKey interface{}
+	if tx.IdempotencyKey != nil {
+		idempotencyKey = *tx.IdempotencyKey
+	} else {
+		idempotencyKey = nil
+	}
+
 	_, err := r.db.Exec(
 		query,
 		tx.ID,
 		tx.SourceAccountID,
 		tx.DestinationAccountID,
 		tx.Amount.String(),
-		tx.IdempotencyKey,
+		idempotencyKey,
 		tx.Status,
 		now,
 		now,
@@ -49,7 +58,7 @@ func (r *transactionRepository) CreateTransaction(tx *domain.Transaction) error 
 		if pqErr, ok := err.(*pq.Error); ok {
 			if pqErr.Code == "23505" { // unique_violation
 				// Check if it's idempotency key violation
-				if pqErr.Constraint == "transactions_idempotency_key_key" {
+				if pqErr.Constraint == "idx_transactions_idempotency_key" {
 					r.logger.Warn("Duplicate idempotency key", "idempotency_key", tx.IdempotencyKey)
 					return errors.ErrDuplicateTransaction
 				}
@@ -90,13 +99,14 @@ func (r *transactionRepository) GetTransactionByIDempotencyKey(key uuid.UUID) (*
 func (r *transactionRepository) scanTransaction(query string, arg interface{}) (*domain.Transaction, error) {
 	var transaction domain.Transaction
 	var amountStr string
+	var idempotencyKey sql.NullString
 
 	err := r.db.QueryRow(query, arg).Scan(
 		&transaction.ID,
 		&transaction.SourceAccountID,
 		&transaction.DestinationAccountID,
 		&amountStr,
-		&transaction.IdempotencyKey,
+		&idempotencyKey,
 		&transaction.Status,
 		&transaction.CreatedAt,
 		&transaction.UpdatedAt,
@@ -110,11 +120,21 @@ func (r *transactionRepository) scanTransaction(query string, arg interface{}) (
 		return nil, errors.NewAppError(errors.InternalError, "failed to get transaction").WithDetails(err.Error())
 	}
 
+	// Parse amount
 	amount, err := decimal.NewFromString(amountStr)
 	if err != nil {
 		return nil, errors.NewAppError(errors.InternalError, "failed to parse amount").WithDetails(err.Error())
 	}
 	transaction.Amount = amount
+
+	// Parse optional idempotency key
+	if idempotencyKey.Valid {
+		key, err := uuid.Parse(idempotencyKey.String)
+		if err != nil {
+			return nil, errors.NewAppError(errors.InternalError, "failed to parse idempotency key").WithDetails(err.Error())
+		}
+		transaction.IdempotencyKey = &key
+	}
 
 	return &transaction, nil
 }

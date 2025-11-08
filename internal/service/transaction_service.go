@@ -31,7 +31,7 @@ type TransferRequest struct {
 	SourceAccountID      string
 	DestinationAccountID string
 	Amount               decimal.Decimal
-	IdempotencyKey       uuid.UUID
+	IdempotencyKey       *uuid.UUID // Now optional
 }
 
 func (s *TransactionService) Transfer(req *TransferRequest) (*domain.Transaction, error) {
@@ -56,17 +56,19 @@ func (s *TransactionService) Transfer(req *TransferRequest) (*domain.Transaction
 
 	// Process everything in a single database transaction
 	err = s.store.WithTransaction(func(store *repository.Store) error {
-		// Check for existing transaction with same idempotency key INSIDE transaction
-		existingTx, err := store.Transaction().GetTransactionByIDempotencyKey(req.IdempotencyKey)
-		if err != nil {
-			return err
-		}
-		if existingTx != nil {
-			s.logger.Info("Returning existing transaction for idempotency key",
-				"idempotency_key", req.IdempotencyKey,
-				"transaction_id", existingTx.ID)
-			transaction = existingTx
-			return nil
+		// Check for existing transaction with same idempotency key ONLY if provided
+		if req.IdempotencyKey != nil {
+			existingTx, err := store.Transaction().GetTransactionByIDempotencyKey(*req.IdempotencyKey)
+			if err != nil {
+				return err
+			}
+			if existingTx != nil {
+				s.logger.Info("Returning existing transaction for idempotency key",
+					"idempotency_key", req.IdempotencyKey,
+					"transaction_id", existingTx.ID)
+				transaction = existingTx
+				return nil
+			}
 		}
 
 		// Determine deterministic order by comparing account IDs to avoid deadlocks
@@ -105,7 +107,7 @@ func (s *TransactionService) Transfer(req *TransferRequest) (*domain.Transaction
 			SourceAccountID:      sourceID,
 			DestinationAccountID: destID,
 			Amount:               req.Amount,
-			IdempotencyKey:       req.IdempotencyKey,
+			IdempotencyKey:       req.IdempotencyKey, // Can be nil
 			Status:               "pending",
 		}
 
