@@ -667,6 +667,13 @@ The application uses structured JSON logging with the following fields:
 
 ## 🚀 Production Readiness & Future Enhancements
 
+### 🚀 Event-Driven Architecture with Kafka
+
+For enhanced scalability and real-time processing, I recommend integrating **Apache Kafka** to handle transaction events in an event-driven architecture.  
+This enables asynchronous processing of transactions, improved fault tolerance through event replay capabilities, and seamless integration with downstream systems for real-time analytics, notifications, and auditing.  
+Kafka's durable message storage and high-throughput capabilities provide robust delivery guarantees while decoupling the core transaction processing from secondary business processes — making the system more resilient and extensible for enterprise-scale operations.
+
+
 ### 🔒 Security Enhancements
 
 #### Authentication & Authorization
