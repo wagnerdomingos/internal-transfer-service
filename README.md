@@ -46,6 +46,47 @@ The Internal Transfers System provides a secure and reliable way to manage finan
 - HTTP Router: Gorilla Mux
 
 ---
+## 📁 Project Structure Documentation
+
+```bash
+internal-transfers/
+├── cmd/
+│   └── server/
+│       └── main.go                 # Application entry point, dependency injection, and server startup
+├── internal/
+│   ├── domain/                     # Core business entities and interfaces
+│   │   ├── account.go              # Account domain model and repository interface
+│   │   └── transaction.go          # Transaction domain model and repository interface
+│   ├── service/                    # Business logic layer
+│   │   ├── account_service.go      # Account creation and retrieval business rules
+│   │   └── transaction_service.go  # Transfer processing with idempotency and concurrency control
+│   ├── repository/                 # Data access layer
+│   │   ├── account_repository.go   # PostgreSQL implementation for account operations
+│   │   ├── transaction_repository.go # PostgreSQL implementation for transaction operations
+│   │   ├── store.go                # Unit of Work pattern for transaction management
+│   │   └── db.go                   # Database interface abstractions and SQL executor
+│   ├── handler/                    # HTTP layer (controllers)
+│   │   ├── account_handler.go      # REST endpoints for account operations
+│   │   ├── transaction_handler.go  # REST endpoints for transfer operations
+│   │   └── common.go               # Shared HTTP utilities and response formatting
+│   ├── config/                     # Configuration management
+│   │   └── config.go               # Environment configuration and DB connection string
+│   └── errors/                     # Domain-specific error handling
+│       └── errors.go               # Custom error types and HTTP status mapping
+├── migrations/                     # Database schema evolution
+│   ├── V1__Create_tables.sql       # Initial schema: accounts and transactions tables
+│   ├── V2__Adding_performance_indexes.sql # Performance optimization indexes
+│   ├── V3__Adding_function_when_update_triggered.sql # Automated updated_at triggers
+│   └── V4__Make_idempotency_key_optional.sql # Schema update for optional idempotency
+├── integration_test.go             # Comprehensive end-to-end test suite
+├── docker-compose.yml              # Multi-container setup (PostgreSQL, Flyway, App)
+├── Dockerfile                      # Application container definition
+├── flyway.conf                     # Database migration configuration
+├── go.mod                          # Go module dependencies
+├── go.sum                          # Dependency checksums
+└── README.md                       # Comprehensive project documentation
+```
+---
 
 ## 📋 Prerequisites
 
